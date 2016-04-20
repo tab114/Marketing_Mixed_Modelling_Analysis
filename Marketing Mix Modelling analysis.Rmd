@@ -1,0 +1,519 @@
+---
+title: "Marketing Mix Modelling test"
+author: "Lefteris Nikolidakis"
+date: "20 March 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+
+In this statistical analysis I will fit a multivariate regression model on a brand's product Sales Volume (response Variable) and the availabe marketing time series data to (i.e. Advertising, Distribution, Pricing) to estimate the impact of various marketing tactics on sales and then forecast the impact of future sets of tactics.
+
+The initial discovery of relationships is done with a training set while a test set is used for evaluating whether the discovered relationships hold.
+
+Transformation and adjustment techniques are also applied (Adstocks, log-log, adding ordinal predictors) so that the data would meet the assumptions of the statistical inference procedure and to reduce the variability of forecasts.
+
+
+### Loading and description of Data
+
+Below I load the tables from the excel file.
+
+```{r, results="hide",  message=FALSE}
+setwd("E:/Lefteris/Interview Annalect")
+
+#created a pricing variable in excel equal with values/volume
+#create data frames
+require(XLConnect)
+wb = loadWorkbook("MMM recruitment exercise data.xls")
+MData = readWorksheet(wb, sheet = 1, header = TRUE)
+names(MData)[c(1,2,6,7,8,9)] <- c("Week_Ending", "Brand_Sales","Press_Spend", "HWivesTVR", "Kids_TVR","SponsorTVR")
+```
+
+
+Here is my assumed interpretation of the dataset:
+
+**Own Brand Sales Volume Kg**: Cumulative sales volume in kg till the weekend date for a Brand's product
+
+**Own Brand Sales Volume £**: Cumulative sales Value in £ till the weekend date
+
+**Own Brand Pricing**: Average Price during the weekend date
+
+**Own Brand Sterling Wtd distribution**: Distribution of the brand's product on several interconnected intermediaries along the way such as wholesalers, distributers, agents and retailers.
+
+**Promotion distribution**: Three types of marketing activities executed by the business/brand in interconnected intermediaries. This type of promotion affects only the distribution variable which subsequently affects the Sales.
+
+**Housewives, Kids and Sponsorship TVRs**: Three TV advertising variables that measure the total of all rating points during the brand's advertising campaign.
+
+**TV Spend £**: Money spent by the Brand/Business in TV Advertising during the weekend date.
+
+**Press Spend £**: Money spent by the Brand/Business in Press Advertising during the weekend date.
+<br>
+
+### Training and Test set partition
+
+In Time Series analysis and forecasting it is advised to leave a portion from the left or right part of the sample data for **testing **, i.e., not to use this part during learning, but to use it to test how successfully the forecasting model predicts our data. The rest of the sample's part will be the **training test** which will be implemented to build up the model.
+
+<i><font face="Geneva" size="2">Example: Time series Training-Test set partition</font></i>
+<img src="sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
+
+
+In our dataset the training-set will be all data from `2004` to `2006`, and the test-set the `2007` data.
+
+```{r}
+TrainData <- MData[4:160,]
+TestData <- MData[161:length(MData[,1]),]
+```
+
+
+### Brand's Sales Perfomance
+
+I will first check how Sales behave over time and their distribution:
+
+```{r unit prefixes function, echo=FALSE}
+format_si <- function(...) {
+  # Format a vector of numeric values according
+  # to the International System of Units.
+  # http://en.wikipedia.org/wiki/SI_prefix
+  #
+  # Based on code by Ben Tupper
+  # https://stat.ethz.ch/pipermail/r-help/2012-January/299804.html
+  # Args:
+  #   ...: Args passed to format()
+  #
+  # Returns:
+  #   A function to format a vector of strings using
+  #   SI prefix notation
+  #
+  
+  function(x) {
+    limits <- c(1e-24, 1e-21, 1e-18, 1e-15, 1e-12,
+                1e-9,  1e-6,  1e-3,  1e0,   1e3,
+                1e6,   1e9,   1e12,  1e15,  1e18,
+                1e21,  1e24)
+    prefix <- c("y",   "z",   "a",   "f",   "p",
+                "n",   "µ",   "m",   " ",   "k",
+                "M",   "G",   "T",   "P",   "E",
+                "Z",   "Y")
+  
+    # Vector with array indices according to position in intervals
+    i <- findInterval(abs(x), limits)
+  
+    # Set prefix to " " for very small values < 1e-24
+    i <- ifelse(i==0, which(limits == 1e0), i)
+
+    paste(format(round(x/limits[i], 1),
+                 trim=TRUE, scientific=FALSE, ...),
+          prefix[i])
+  }
+}
+```
+
+```{r message=FALSE, fig.height=3.6, fig.width=9}
+library(ggplot2)
+require(gridExtra)
+plot1 <- ggplot(TrainData, aes(x=Week_Ending, y=Brand_Sales)) + geom_line() + geom_smooth(method=lm) + ggtitle("Time Series plot and Trend for the Sales")
+trendfit <- lm(Brand_Sales ~ Week_Ending, TrainData)
+plot2 <- ggplot(TrainData, aes(Brand_Sales)) + geom_histogram(bins=25) + ggtitle("Histogram for Sales")
+grid.arrange(plot1, plot2, widths = c(3,2) , heights=2 , ncol=2, nrow=1)
+```
+
+- The histogram shows that our response's variable is **right skewed**, therefore some transformations must be implemented so that the data would meet the regression's assumptions.
+
+- The time series plot also shows an increasing **trend** over time
+
+```{r echo=FALSE}
+TrainData$Week_ending <- as.numeric(TrainData$Week_Ending)
+```
+
+```{r message=FALSE, fig.width=7.2, fig.height=4.7}
+corMatrix <-cor(TrainData[,c("Brand_Sales","Week_ending", "Prices", "Distribution", "HWivesTVR", "Kids_TVR", "SponsorTVR", "Press_Spend")])
+library(plotrix)
+color2D.matplot(corMatrix, show.values = 2, axes=FALSE, xlab="",ylab="", main="Association matrix for all Variables")
+axis(1,at=c(seq(from=0.5,to=7.5,by=1)),labels=colnames(corMatrix), cex.axis=0.55)
+axis(2,at=c(seq(from=0.5,to=7.5,by=1)),labels=rev(colnames(corMatrix)), las=2, cex.axis=0.55)
+```
+
+From the correlation matrix we can notice that:
+
+- Sales variable is significantly related with **Prices**, **Distribution** and **Time** (Week_ending).
+
+- All correlation coefficients with **Advertising** and Sales are low. This is expected since the ads' carry-over effect has not been yet considered.
+
+- Distribution and Time are highly correlated hence we suspect that the observed trend was possibly casually related with the brand's Distribution.
+
+
+### Pricing
+
+The plot below shows that price changes of the 9th brand variant significantly impacts sales negatively. Also the relationship seems to be monomial of the form <b><i><font face="sans-serif" size="2.5">y=ax<sup>k</sup></font></i></b> instead of linear, therefore I transformed the x variable respectively:
+
+```{r Pricing, fig.height=3.9, fig.width=7.6}
+##use log-log transformation to calculate the power (k) of the monomial:
+fit<-lm(log(Brand_Sales)~log(Prices), data=TrainData)
+##beta coefficient equals bo=17.87 and a=-3.908
+##That means that the relationship is
+## log(y)=17.8686 -3.7977*log(x) <=>
+## y = e^(17.8686 -3.7977*log(x)) <=>
+## y = e^17.8686 * e^log(x^(-3.7977)) <=>
+## y = 57575057 * x^(-3.7977) 
+fit<-lm(Brand_Sales ~ 0 + I(Prices^(-3.7977)), data=TrainData)
+## the coefficient estimated with the monomial formula is almost equal with the log-log formula 
+
+ggplot(TrainData, aes(x=Prices, y=(Brand_Sales))) +  geom_point() + geom_smooth(method=lm, formula=y~I(x^(-3.7977))) + xlab("Prices in £") + ylab("Sales Volume") +ggtitle("Fitted line in Sales vs Prices")
+```
+
+
+### Seasoning
+
+When looking at the plot below we see that sales have increased drasticly over the **Christmas** period each year, specifically increased from the week starting at the 18th of december to 28th, and decreased from weeks starting from 29 to 3 of january.
+
+There is also a strong seasonal period over the **Sales period** of september. Nevertheless the respective pricing seasonal graph clearly shows that the september seasonality can be explained quite well by the `Prices` variable and therefore we will ignore it.
+
+```{r Seasoning, fig.width=8.6, echo=FALSE}
+###Seasonal Plot - Sales per year
+TrainData$Year <- as.factor(format(TrainData$Week_Ending, "%Y"))
+#to use as actual values in x-axis
+TrainData$MonthWeek <- format(TrainData$Week_Ending, "%m-%d")
+#to use as labels in x-axis
+TrainData$MonthWeek__text <- format(TrainData$Week_Ending, "%b-%d")
+
+##create breaks & labels by first sorting thee data frame because all month dates are sorted in plot 
+library(plyr)
+TrainData_sorted <- arrange(TrainData, MonthWeek)
+breaks <- TrainData_sorted[seq(1,length(TrainData_sorted$MonthWeek), length.out = 16),"MonthWeek"]
+labels <- TrainData_sorted[seq(1,length(TrainData_sorted$MonthWeek), length.out = 16),"MonthWeek__text"]
+
+##Monthweek is sorted correctly in scatterplot x axis from January to December.
+##MonthWeek_text is sorted wrongly starting from April, February, March and so on - alphabetical.
+##This is the reason I chose "MonthWeek" for x instead of MonthWeek_text.
+
+library("gridExtra")
+p1 <- ggplot(TrainData, aes(MonthWeek, Brand_Sales)) + geom_line(aes(group=Year,  colour=Year)) + geom_point(aes(group=Year, colour=Year)) + xlab("Months") + ylab("Sales Volume") + ggtitle("Seasonal Plot - Sales and Prices each Year") + scale_x_discrete(breaks = breaks, labels = labels)
+
+p2 <- ggplot(TrainData, aes(MonthWeek, Prices)) + geom_line(aes(group=Year,  colour=Year)) + geom_point(aes(group=Year, colour=Year)) + xlab("Months") + ylab("Prices\n") + scale_x_discrete(breaks = breaks, labels = labels)
+grid.arrange(p1,p2)
+```
+
+This Seasonality can be estimated by inserting a **three level** ordinal predictor variable in the model:
+
+```{r echo=FALSE, fig.width=7.7}
+#create season ordinal variable that takes values -1 in seasonal decrease, 0 if non seasonal and 1 if seasonal increase
+
+##December Seasoning
+TrainData$Season <- NA
+TrainData$Season[TrainData$MonthWeek >"12-18" & TrainData$MonthWeek < "12-29"] <- 1
+TrainData$Season[TrainData$MonthWeek >="12-29"] <- -0.5
+TrainData$Season[TrainData$MonthWeek <="01-03"] <- -0.5
+##September Seasoning
+#TrainData$Season[TrainData$MonthWeek >="09-09" & TrainData$MonthWeek <= "10-02"] <- 1
+##Zero Values
+TrainData$Season[is.na(TrainData$Season)] <- 0
+
+## Sales vs Ordinal Plots
+library("gridExtra")
+p1 <- ggplot(TrainData, aes(Week_Ending, y=Brand_Sales)) +  geom_line() + xlab("") + ylab("Sales Volume") + expand_limits(y = 0) + ggtitle("Sales and Ordinal variable over time") + scale_y_continuous(labels=format_si())
+p2 <- ggplot(TrainData, aes(x=Week_Ending, y=as.numeric(Season))) +  geom_line() + xlab("Dates") + ylab("Seasonlity as Ordinal variable")
+grid.arrange(p1,p2)
+
+##Make Season Variable factor variable
+TrainData$Season <- as.factor(TrainData$Season)
+
+#check how strong is the custom Ordinal's variable relationship with the sales volume:
+library(nnet)
+fit <- lm(TrainData$Brand_Sales  ~ 0 + TrainData$Season) ##Season as factor instead of numeric
+anova(fit)
+```
+
+From the graph and Anova's p-value, we come to the conclusion that the ordinal variable explains quite well the seasonality in sales, so we are confident to use it in our mixed marketing model.
+
+### Distribution
+
+When looking at the scatterplot below (2nd plot), we come to the conclusion that `Distribution` affects significantly the Brand's Sales. Also given the assumption that the relationship between the two variables is liner, the fitted line's slope is approximately equal with the **trend's slope** coefficient, which confirms our suspicion that the trend we identified in the Sales volume is explained by the Distribution variable.
+
+```{r Sterling distribution, fig.height=3.3, fig.width=8.2}
+## Plot Sales against distribution
+plot1 <- ggplot(TrainData, aes(x=Week_Ending, y=Distribution)) +  geom_line() + xlab("Dates") + ylab("Distribution") + ggtitle("Distribution over Time") + geom_smooth(method=lm)
+
+plot2 <- ggplot(TrainData, aes(x=Distribution, y=Brand_Sales)) +  geom_point() +  geom_smooth(method=lm) + geom_smooth(method=lm) +
+  xlab("Distribution") + 
+  ylab("Sales Volume") + ggtitle("Sales-Distribution Plot") + scale_y_continuous(labels=format_si())
+
+grid.arrange(plot1, plot2, widths = c(3,2) , heights=2 , ncol=2, nrow=1)
+```
+
+
+#### Ongoing Marketing mix modeling 
+
+Before testing the media variables I will fit and check the model with the variables we explored till now:
+
+<b>Response Variable:</b>
+
+* Brand's Sales Volume  (Continuous)
+
+<b>Predictor Variables:</b> 
+
+1. Prices of response variable (Continuous)
+
+2. Distribution of products (Ordinal)
+
+3. Seasonality (Ordinal)
+
+
+```{r}
+OnGoing <- lm(Brand_Sales ~ I(Prices^(-3.7977)) + Distribution + Season, data=TrainData)
+summary(OnGoing)
+```
+
+All p-values for the multi regression coefficients are smaller than the critical value a=0.05. 
+
+Also the Adjusted R-squared for the current model is equal to `r round(summary(OnGoing)$adj.r.squared,3)` which indicates that 
+**`r round(100*summary(OnGoing)$adj.r.squared,1)`%** of the variation in `Brand_Sales` is exlained by the current model. 
+
+### Media
+
+TV Advertising affects present and future sales due to its carry-over effect, whereby the impact of adverting on sales can occur during a subsequent time period. This aspect can be controlled with adstock transformation which measures the decaying and diminishing returns effect of advertising throughout the weeks.
+
+By assuming that the output ad variable depends linearly only on its own previous value, I will use the autoregressive (AR<sub>1</sub>) formula for calculating the advertising adstocks:
+
+<b><i><font face="sans-serif">A<sub>t</sub> = X<sub>t</sub> + adstock rate*A<sub>t-1</sub></font></i></b>
+
+where A<sub>t</sub> is the transformed Advertising value (adstock) in time period t, X<sub>t</sub> the value of the advertising variable at time t, A<sub>t-1</sub> the adstock in the previous period t-1 and adstock rate a coefficient derived through Least Squares Method. 
+
+The advertising variables with carry-over effects that will be transformed to adstocks, are _Housewives_ and _Kids_ and _Sponsorships_ TVRs. 
+
+```{r Plot Ads, fig.width=8.6, fig.height=3.8}
+Sales <- TrainData$Brand_Sales
+HWivesTVR <- TrainData$HWivesTVR
+Kids_TVR <- TrainData$Kids_TVR
+SponsorTVR <- TrainData$SponsorTVR
+
+ggplot(TrainData, aes(Week_Ending)) + 
+  geom_line(aes(y = HWivesTVR, colour = "HWivesTVR")) + 
+  geom_line(aes(y = Kids_TVR, colour = "Kids_TVR")) +
+  geom_line(aes(y = SponsorTVR, colour = "SponsorTVR")) + ylab("Adveritising TVRs") +
+  ggtitle("Ads' TVRs over time")
+```
+
+The Housewives and Kids TVRs are highly correlated with each other and also from the correlation matrix we can see that both affect Sales approximately equally (cor coefficients&asymp;0.2). So since they are both measured in the same unit (TVR), I will merge them to one variable by adding each week's respective values of the two ads.
+
+```{r}
+Kids_and_Housewives <- HWivesTVR+Kids_TVR
+TrainData["Kids_and_Housewives"] <- Kids_and_Housewives
+```
+
+<br>
+
+#### Adstock transformation:
+
+First I will find the optimum Adstock Rate coefficient for the transformation. The best approach for deriving the adstock rate is by fitting separate regression models for a range of potential adstock rates; the optimum adstock coefficient will be the one, for which the minimum MSE and biggest R<sup>2</sup> is obtained.
+
+```{r Adstock, fig.width=10.2, fig.height=3.8, results="hide"}
+###Create adstocks for Kids_and_Housewives
+
+##First find best adstock rate
+AdstockRate <- seq(0.1, 1, 0.01)
+TrainData$AdstockedKids_and_Housewives = numeric(length(Kids_and_Housewives))
+TrainData$AdstockedKids_and_Housewives[1] = Kids_and_Housewives[1]
+comb <- data.frame(AdstockRate, sigmas = rep(NA, times = length(AdstockRate)), r.squared = rep(NA, times = length(AdstockRate)))
+
+for (i in 1:length(AdstockRate)){
+  for(j in 2:length(Kids_and_Housewives)){
+      TrainData$AdstockedKids_and_Housewives[j] = Kids_and_Housewives[j] + AdstockRate[i] * TrainData$AdstockedKids_and_Housewives[j-1]
+      #each advertising value (volume) is transformed and equal as the value plus a percentage 
+      #of the previous transfromed value.
+  }
+  modFit = lm(Brand_Sales ~ I(Prices^(-3.7977)) + Distribution + Season + AdstockedKids_and_Housewives, data=TrainData)
+  comb[i,2] = summary(modFit)$sigma
+  comb[i,3] = summary(modFit)$r.squared
+}
+
+##check if min MSE is accompanied with the highest R Squared coefficient of determination.
+all.equal(comb[comb$sigmas == min(comb$sigmas),1], comb[comb$r.squared == max(comb$r.squared),1])
+##the optimal Adstock Rate
+fitted_AdRate <- comb[comb$sigmas == min(comb$sigmas),1]
+
+for(j in 2:length(Kids_and_Housewives)){
+      TrainData$AdstockedKids_and_Housewives[j] = Kids_and_Housewives[j] + fitted_AdRate * TrainData$AdstockedKids_and_Housewives[j-1]
+      #each advertising value (volume) is transformed and equal as the value plus a percentage 
+      #of the previous transfromed value.
+  }
+
+ggplot(TrainData, aes(Week_Ending)) + 
+  geom_line(aes(y = Kids_and_Housewives, colour = "Kids_and_Housewives")) + 
+  geom_line(aes(y = AdstockedKids_and_Housewives, colour = "AdstockedKids_and_Housewives")) + ylab("Adveritising TVRs") + ggtitle("Adstock vs. Advertising over time")
+```
+
+```{r Adstock for SponsorTVR, echo=FALSE}
+
+###Create adstocks for SponsorTVR
+TrainData$AdstockedSponsorTVR = numeric(length(SponsorTVR))
+TrainData$AdstockedSponsorTVR[1] = SponsorTVR[1]
+
+for(j in 2:length(SponsorTVR)){
+      TrainData$AdstockedSponsorTVR[j] = SponsorTVR[j] + fitted_AdRate * TrainData$AdstockedSponsorTVR[j-1]
+      #each advertising value (volume) is transformed and equal as the value plus a percentage 
+      #of the previous transfromed value.
+  }
+```
+
+By comparing the two lines in the graph, we can see how adstock measures the memory effect of advertising carried over from start of each advertising.
+
+```{r}
+##The model
+Modfit <- lm(Brand_Sales ~ I(Prices^(-3.7977)) + Distribution + Season + AdstockedKids_and_Housewives + AdstockedSponsorTVR, data=TrainData)
+
+summary(Modfit)
+```
+
+The  p-value for the coefficient of Kids/Housewives adstock is below the critical value a=0.05. On the other hand the  p-value for the coefficient of  TV sponsorship is very high and so it should be excluded from the model. 
+
+Also when comparing the R<sup>2</sup> and MSE of the current and previous model we can see that the adstocked variable interprets only **`r round(100*(summary(Modfit)$adj.r.squared - summary(OnGoing)$adj.r.squared),2)`%** extra variability in the `Brand_Sales` and that the model's standard error is not increased at all. 
+
+#### Press 
+
+Press Advertising is described in our data only as money spent in each respective week and most of the values are equal to zero, hence I will replace this variable with a 3 level ordinal variable indicating the size of investment. The coefficients for each ordinal value will explain the average increase in Sales volume when an investment in Press occurs with a specific cost range occurs, with the rest of the predictors' values fixed.
+
+Also I will assume that there is no carry-over component in Press advertising. In other words each week<sub>t</sub>'s press ad investments only affect sales of that same week.
+
+```{r fig.width=7.5, fig.height=3.7}
+##Most press efforts are equal to zero:
+ggplot(TrainData, aes(Press_Spend,Brand_Sales)) + geom_point() + ggtitle("Sales vs £ spent in Press Advertising")
+
+##Ordinal
+TrainData$PressFactor <- rep(0, length(TrainData$Press_Spend))
+TrainData$PressFactor[TrainData$Press_Spend>0 & TrainData$Press_Spend<=10000] <- 1
+TrainData$PressFactor[TrainData$Press_Spend>10000] <- 2
+TrainData$PressFactor <- as.factor(TrainData$PressFactor)
+
+modFit <- lm(Brand_Sales ~ I(Prices^(-3.7977)) + Distribution + Season + AdstockedKids_and_Housewives + PressFactor, data=TrainData)
+summary(modFit)
+```
+
+Press ordinally variable should be excluded from the model since all respective coefficients have p-values above the critical level.
+
+### Final Model
+
+```{r}
+FinModel <- lm(Brand_Sales ~ I(Prices^(-3.7977)) + Distribution + Season + AdstockedKids_and_Housewives, data=TrainData)
+summary(FinModel)
+```
+
+
+The Adjusted R<sup>2</sup> for the final model is eventually equal with **`r round(summary(FinModel)$adj.r.squared,3)`**.
+
+Also all p-values for the coefficients are very small and the expected standard error of the residuals is equal with *2095*. 
+
+### Model Diagnostics
+
+Before forecasting the data in the test set, we need to assess the validity of a model and examine if the multivariate regression assumptions are met.
+
+When looking at the graphical diagnostic results below we conclude that:
+
+- The variance of the residuals is approximately equal over the whole period (see Residuals Time Series plot).
+
+- The points are not fully randomly arranged over time since weak autoregressive trends are still present (see "Residuals Time Series" plot and "Autocorrelation for 2006 residiuals" plot). 
+
+- There are three residual points with high values (not outliers) and relatively high leverage (see "Residuals vs Leverage" plot). The two of these three values appear within the Christmas period (see "Residuals' Time series" plot), hence we should improve the interpretability of the `Season` custom variable.
+
+- The Errors are approximately normally distributed with a slight right skeweness present (see Histogram and Q-Q plot)
+
+- In the range of ten to thirteen thousand sales volume a significant part of negative errors is present (see "Residuals vs Fitted" diagnostic plot).  In order to identify this trend we should further explore our dataset or add extra predictors.
+
+```{r fig.height=3, fig.width=7.8, echo=FALSE}
+TrainData$Errors <- summary(FinModel)$resid
+
+plot1 <- ggplot(TrainData, aes(x=Week_Ending, y=Errors)) +  geom_point() + ylab("Residuals") + ggtitle("Residuals' Time series plot") +geom_hline(yintercept=0)
+
+plot2 <- ggplot(data=TrainData, aes(Errors)) + geom_histogram(bins=20) + xlab("residuals") + ylab("Count") + ggtitle("Histogram for residuals")
+
+require(gridExtra)
+grid.arrange(plot1, plot2, widths = c(3,2) , heights=2 , ncol=2, nrow=1)
+```
+
+```{r message=FALSE, echo=FALSE, fig.width=7.8}
+par(mfrow = c(2, 2))
+require(ggfortify)
+autoplot(FinModel)
+```
+
+``` {r fig.height=3.3, fig.width=7.8, echo=FALSE, message=FALSE, warning=FALSE}
+require(forecast)
+
+TSData <- ts(data=TrainData$Errors[109:160], frequency = 52, start = c(2006, 1))
+autoplot(Acf(TSData, lag.max=52, plot=FALSE)) + ggtitle("Autocorrelation plot for 2006 Residuals")
+```
+
+
+This final model can be used to forecast future Sales given future tactics, by adding in the regression formula the respective values of the model's variables:
+
+1. the time period of interest
+
+2. Planed Prices for the product in the respective period
+
+3. The estimated product ditribution for the respective period
+
+3. TVRs of the planned Investments in TV advertising
+
+4. The respective seasonal ordinal values, if the period includes the Christmas season.
+
+
+## Model Testing
+
+Here we will run our model on the unseen 2007 dataset and by comparing the predicted with the observed Sales for 2007, we will determine whether the model's guesses are sufficient.
+
+```{r echo=FALSE}
+TestData <- MData[161:length(MData[,1]),]
+```
+
+```{r echo=FALSE}
+TestData$Year <- as.factor(format(TestData$Week_Ending, "%Y"))
+#to use as actual values in x-axis
+TestData$MonthWeek <- format(TestData$Week_Ending, "%m-%d")
+#to use as labels in x-axis
+TestData$MonthWeek__text <- format(TestData$Week_Ending, "%b-%d")
+
+TestData$Season <- NA
+TestData$Season[TestData$MonthWeek >"12-18" & TestData$MonthWeek < "12-29"] <- 1
+TestData$Season[TestData$MonthWeek >="12-29"] <- -0.5
+TestData$Season[TestData$MonthWeek <="01-03"] <- -0.5
+##Zero Values
+TestData$Season[is.na(TestData$Season)] <- 0
+TestData$Season <- as.factor(TestData$Season)
+```
+
+```{r echo=FALSE}
+###Create adstocks for Kids_and_Housewives
+TestData$Kids_and_Housewives <- TestData$HWivesTVR + TestData$Kids_TVR
+TestData$AdstockedKids_and_Housewives = numeric(length(TestData$Kids_and_Housewives))
+TestData$AdstockedKids_and_Housewives[1] = TestData$Kids_and_Housewives[1]
+
+for(j in 2:length(TestData$Kids_and_Housewives)){
+      TestData$AdstockedKids_and_Housewives[j] = TestData$Kids_and_Housewives[j] + fitted_AdRate * TestData$AdstockedKids_and_Housewives[j-1]
+      #each advertising value (volume) is transformed and equal as the value plus a percentage 
+      #of the previous transfromed value.
+  }
+```
+
+```{r echo=FALSE}
+Prices_Transformed <- TestData$Prices^(-3.7977)
+Distribution <- TestData$Distribution
+Season0 <- TestData$Season == 0
+Season1 <- TestData$Season == 1
+Adstocked_Kids_Housewives <- TestData$AdstockedKids_and_Housewives
+```
+
+```{r}
+TestData$PredictedSales_2007 <- FinModel$coef[1] + FinModel$coef[2]*Prices_Transformed + FinModel$coef[3]*Distribution + FinModel$coef[4]*Season0 + FinModel$coef[5]*Season1 + FinModel$coef[6]*Adstocked_Kids_Housewives
+```
+
+When looking at the comparison plots below we come to the conclusion that our model forecasts quite well future sales. 
+
+```{r echo=FALSE, fig.width=10.6, fig.height=3.5}
+TestData$Errors <- TestData$Brand_Sales - TestData$PredictedSales_2007
+
+plot1 <- ggplot(TestData, aes(x=Brand_Sales, y=PredictedSales_2007)) + geom_point() + geom_abline(slope=1, size=0.8, colour="red", alpha=0.3) + expand_limits(y=c(5000,27500), x=c(5000,27500)) + xlab("Real 2007 Sales") + ylab("Predicted 2007 Sales")
+
+plot2 <- ggplot(TestData, aes(x=Week_Ending)) + geom_line(aes(y=Brand_Sales, colour="Brand_Sales")) + geom_line(aes(y=PredictedSales_2007, colour="PredictedSales_2007")) + xlab("Real 2007 Sales") + ylab("Predicted 2007 Sales")
+
+grid.arrange(plot1, plot2, widths = c(2.5,4) , heights=2 , ncol=2, nrow=1)
+```
