@@ -1,9 +1,9 @@
-# Marketing Mix Modelling test
+# Marketing Mix Modelling Analysis
 Lefteris Nikolidakis  
 20 March 2016  
 
 
-In this statistical analysis I will fit a multivariate regression model on a brand's product Sales Volume (response Variable) and the availabe marketing time series data to (i.e. Advertising, Distribution, Pricing) to estimate the impact of various marketing tactics on sales and then forecast the impact of future sets of tactics.
+In this statistical analysis I fitted a multivariate regression model on simulations of `Sales Volume` (response Variable) and marketing series data (i.e. Advertising, Distribution, Pricing) to estimate the impact of various marketing tactics on sales and then forecast the impact of future sets of tactics.
 
 The initial discovery of relationships is done with a training set while a test set is used for evaluating whether the discovered relationships hold.
 
@@ -15,13 +15,13 @@ Transformation and adjustment techniques are also applied (Adstocks, log-log, ad
 Below I load the tables from the excel file.
 
 
-```r
-setwd("E:/Lefteris/Interview Annalect")
 
+
+```r
 #created a pricing variable in excel equal with values/volume
 #create data frames
 require(XLConnect)
-wb = loadWorkbook("MMM recruitment exercise data.xls")
+wb = loadWorkbook("data.xls")
 MData = readWorksheet(wb, sheet = 1, header = TRUE)
 names(MData)[c(1,2,6,7,8,9)] <- c("Week_Ending", "Brand_Sales","Press_Spend", "HWivesTVR", "Kids_TVR","SponsorTVR")
 ```
@@ -51,7 +51,7 @@ Here is my assumed interpretation of the dataset:
 In Time Series analysis and forecasting it is advised to leave a portion from the left or right part of the sample data for **testing **, i.e., not to use this part during learning, but to use it to test how successfully the forecasting model predicts our data. The rest of the sample's part will be the **training test** which will be implemented to build up the model.
 
 <i><font face="Geneva" size="2">Example: Time series Training-Test set partition</font></i>
-<img src="sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
+<img src="https://raw.githubusercontent.com/tab114/Marketing_Mixed_Modelling_Analysis/master/Marketing_Mix_Modelling_analysis_files/figure-html/sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
 
 
 In our dataset the training-set will be all data from `2004` to `2006`, and the test-set the `2007` data.
@@ -79,7 +79,7 @@ plot2 <- ggplot(TrainData, aes(Brand_Sales)) + geom_histogram(bins=25) + ggtitle
 grid.arrange(plot1, plot2, widths = c(3,2) , heights=2 , ncol=2, nrow=1)
 ```
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-3-1.png)
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-4-1.png)
 
 - The histogram shows that our response's variable is **right skewed**, therefore some transformations must be implemented so that the data would meet the regression's assumptions.
 
@@ -96,7 +96,7 @@ axis(1,at=c(seq(from=0.5,to=7.5,by=1)),labels=colnames(corMatrix), cex.axis=0.55
 axis(2,at=c(seq(from=0.5,to=7.5,by=1)),labels=rev(colnames(corMatrix)), las=2, cex.axis=0.55)
 ```
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-5-1.png)
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-6-1.png)
 
 From the correlation matrix we can notice that:
 
@@ -140,7 +140,7 @@ There is also a strong seasonal period over the **Sales period** of september. N
 
 This Seasonality can be estimated by inserting a **three level** ordinal predictor variable in the model:
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-6-1.png)
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-7-1.png)
 
 ```
 ## Analysis of Variance Table
@@ -364,7 +364,7 @@ Also I will assume that there is no carry-over component in Press advertising. I
 ggplot(TrainData, aes(Press_Spend,Brand_Sales)) + geom_point() + ggtitle("Sales vs £ spent in Press Advertising")
 ```
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-10-1.png)
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-11-1.png)
 
 ```r
 ##Ordinal
@@ -462,11 +462,11 @@ When looking at the graphical diagnostic results below we conclude that:
 
 - In the range of ten to thirteen thousand sales volume a significant part of negative errors is present (see "Residuals vs Fitted" diagnostic plot).  In order to identify this trend we should further explore our dataset or add extra predictors.
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-12-1.png)
-
 ![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-13-1.png)
 
 ![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-14-1.png)
+
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-15-1.png)
 
 
 This final model can be used to forecast future Sales given future tactics, by adding in the regression formula the respective values of the model's variables:
@@ -501,4 +501,4 @@ TestData$PredictedSales_2007 <- FinModel$coef[1] + FinModel$coef[2]*Prices_Trans
 
 When looking at the comparison plots below we come to the conclusion that our model forecasts quite well future sales. 
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-20-1.png)
+![](Marketing_Mix_Modelling_analysis_files/figure-html/unnamed-chunk-21-1.png)

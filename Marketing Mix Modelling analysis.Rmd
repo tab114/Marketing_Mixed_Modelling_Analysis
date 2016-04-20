@@ -1,5 +1,5 @@
 ---
-title: "Marketing Mix Modelling test"
+title: "Marketing Mix Modelling Analysis"
 author: "Lefteris Nikolidakis"
 date: "20 March 2016"
 output: 
@@ -8,7 +8,7 @@ output:
 ---
 
 
-In this statistical analysis I will fit a multivariate regression model on a brand's product Sales Volume (response Variable) and the availabe marketing time series data to (i.e. Advertising, Distribution, Pricing) to estimate the impact of various marketing tactics on sales and then forecast the impact of future sets of tactics.
+In this statistical analysis I fitted a multivariate regression model on simulations of `Sales Volume` (response Variable) and marketing series data (i.e. Advertising, Distribution, Pricing) to estimate the impact of various marketing tactics on sales and then forecast the impact of future sets of tactics.
 
 The initial discovery of relationships is done with a training set while a test set is used for evaluating whether the discovered relationships hold.
 
@@ -18,14 +18,16 @@ Transformation and adjustment techniques are also applied (Adstocks, log-log, ad
 ### Loading and description of Data
 
 Below I load the tables from the excel file.
+```{r echo=FALSE, results='hide'}
+setwd("E:/Lefteris/Marketing Mixed Modelling")
+```
+
 
 ```{r, results="hide",  message=FALSE}
-setwd("E:/Lefteris/Interview Annalect")
-
 #created a pricing variable in excel equal with values/volume
 #create data frames
 require(XLConnect)
-wb = loadWorkbook("MMM recruitment exercise data.xls")
+wb = loadWorkbook("data.xls")
 MData = readWorksheet(wb, sheet = 1, header = TRUE)
 names(MData)[c(1,2,6,7,8,9)] <- c("Week_Ending", "Brand_Sales","Press_Spend", "HWivesTVR", "Kids_TVR","SponsorTVR")
 ```
@@ -55,7 +57,7 @@ Here is my assumed interpretation of the dataset:
 In Time Series analysis and forecasting it is advised to leave a portion from the left or right part of the sample data for **testing **, i.e., not to use this part during learning, but to use it to test how successfully the forecasting model predicts our data. The rest of the sample's part will be the **training test** which will be implemented to build up the model.
 
 <i><font face="Geneva" size="2">Example: Time series Training-Test set partition</font></i>
-<img src="sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
+<img src="https://raw.githubusercontent.com/tab114/Marketing_Mixed_Modelling_Analysis/master/Marketing_Mix_Modelling_analysis_files/figure-html/sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
 
 
 In our dataset the training-set will be all data from `2004` to `2006`, and the test-set the `2007` data.
