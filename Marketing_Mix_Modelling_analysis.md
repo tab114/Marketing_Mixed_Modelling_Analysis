@@ -27,7 +27,7 @@ names(MData)[c(1,2,6,7,8,9)] <- c("Week_Ending", "Brand_Sales","Press_Spend", "H
 ```
 
 
-Here is my assumed interpretation of the dataset:
+The dataset:
 
 **Own Brand Sales Volume Kg**: Cumulative sales volume in kg till the weekend date for a Brand's product
 
@@ -48,7 +48,7 @@ Here is my assumed interpretation of the dataset:
 
 ### Training and Test set partition
 
-In Time Series analysis and forecasting it is advised to leave a portion from the left or right part of the sample data for **testing **, i.e., not to use this part during learning, but to use it to test how successfully the forecasting model predicts our data. The rest of the sample's part will be the **training test** which will be implemented to build up the model.
+In Time Series analysis and forecasting it is advised to leave a portion from the left or right part of the sample data for **testing**, i.e., not to use this part during learning, but to use it to test how successfully the forecasting model predicts our data. The rest of the sample's part will be the **training test** which will be implemented to build up the model.
 
 <i><font face="Geneva" size="2">Example: Time series Training-Test set partition</font></i>
 <img src="https://raw.githubusercontent.com/tab114/Marketing_Mixed_Modelling_Analysis/master/Marketing_Mix_Modelling_analysis_files/figure-html/sample_time_series.png" width="720" height="250" title="Example Time series - Training & Test set partition" />
