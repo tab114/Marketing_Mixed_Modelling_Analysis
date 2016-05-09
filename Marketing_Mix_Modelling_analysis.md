@@ -29,13 +29,13 @@ names(MData)[c(1,2,6,7,8,9)] <- c("Week_Ending", "Brand_Sales","Press_Spend", "H
 
 The dataset:
 
-**Own Brand Sales Volume Kg**: Cumulative sales volume in kg till the weekend date for a Brand's product
+**Brand Sales Volume Kg**: Cumulative sales volume in kg till the weekend date for a Brand's product
 
-**Own Brand Sales Volume £**: Cumulative sales Value in £ till the weekend date
+**Brand Sales Volume £**: Cumulative sales Value in £ till the weekend date
 
-**Own Brand Pricing**: Average Price during the weekend date
+**Brand Pricing**: Average Price during the weekend date
 
-**Own Brand Sterling Wtd distribution**: Distribution of the brand's product on several interconnected intermediaries along the way such as wholesalers, distributers, agents and retailers.
+**Brand Sterling Wtd distribution**: Distribution of the brand's product on several interconnected intermediaries along the way such as wholesalers, distributers, agents and retailers.
 
 **Promotion distribution**: Three types of marketing activities executed by the business/brand in interconnected intermediaries. This type of promotion affects only the distribution variable which subsequently affects the Sales.
 
