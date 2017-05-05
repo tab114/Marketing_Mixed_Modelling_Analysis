@@ -171,7 +171,8 @@ plot2 <- ggplot(TrainData, aes(x=Distribution, y=Brand_Sales)) +  geom_point() +
 grid.arrange(plot1, plot2, widths = c(3,2) , heights=2 , ncol=2, nrow=1)
 ```
 
-![](Marketing_Mix_Modelling_analysis_files/figure-html/Sterling distribution-1.png)
+
+![](Marketing_Mix_Modelling_analysis_files/figure-html/sterling-distribution-1.png)
 
 
 #### Ongoing Marketing mix modeling 
